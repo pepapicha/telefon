@@ -14,7 +14,6 @@
             --default-gray: #ccc;
         }
 
-        /* Loading */
         #loader-wrapper {
             position: fixed;
             top: 0;
@@ -30,7 +29,6 @@
             transition: opacity 0.5s ease;
         }
 
-        /*Pracuju*/
         #loader-wrapper img {
             width: 400px; 
             height: auto;
@@ -58,11 +56,21 @@
             margin-top: 40px;
         }
 
+        /* Styl pro nadpisy operátorů uvnitř sekcí */
+        .operator-header {
+            width: 100%;
+            margin: 20px 0 10px 0;
+            font-size: 1.2em;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 20px;
-            margin-top: 20px;
+            margin-bottom: 30px; /* Mezera pod blokem operátora */
         }
 
         .karta {
@@ -119,11 +127,9 @@
     </div>
 
     <h1>Pepovy SIMky</h1>
-    <div id="moje-sim" class="grid"></div>
-
-    <div class="cara-oddelovac">
+    <div id="moje-sim"></div> <div class="cara-oddelovac">
         <h1>Ondrovy SIMky</h1>
-        <div id="kolegy-sim" class="grid"></div>
+        <div id="kolegy-sim"></div>
     </div>
 
     <div class="cara-oddelovac">
@@ -139,11 +145,10 @@
                 const response = await fetch(API_URL);
                 const data = await response.json();
 
-                renderujSekci(data.moje, 'moje-sim');
-                renderujSekci(data.kolegy, 'kolegy-sim');
-                renderujSekci(data.deaktivovane, 'deaktivovane-sim', true);
+                renderujSekciSeskupene(data.moje, 'moje-sim');
+                renderujSekciSeskupene(data.kolegy, 'kolegy-sim');
+                renderujSekciOstatni(data.deaktivovane, 'deaktivovane-sim', true);
 
-                // Skrytí loaderu
                 const loader = document.getElementById('loader-wrapper');
                 loader.style.opacity = '0';
                 setTimeout(() => {
@@ -161,32 +166,75 @@
             if (t.includes('vodafone')) return 'vodafone';
             if (t.includes('t-mobile')) return 't-mobile';
             if (t.includes('o2')) return 'o2';
-            return 'default';
+            return 'ostatní';
         }
 
-        function renderujSekci(seznam, elementId, jeDeaktivovana = false) {
+        // Nová funkce pro seskupené zobrazení
+        function renderujSekciSeskupene(seznam, elementId) {
             const container = document.getElementById(elementId);
             container.innerHTML = "";
 
+            // 1. Rozdělení do skupin
+            const skupiny = {};
             seznam.forEach(sim => {
-                const opClass = urciOperatora(sim.zbytekTextu);
-                const karta = document.createElement('div');
-                karta.className = `karta ${opClass}` + (jeDeaktivovana ? ' karta-deaktivovana' : '');
-                
-                karta.innerHTML = `
-                    <div class="id-sim">${sim.idSim}</div>
-                    <span class="cislo-text">${sim.zbytekTextu}</span>
-                    <div class="info-radek">
-                        <span class="label">V telefonu:</span>
-                        <span>${sim.vTelefonu || '---'}</span>
-                    </div>
-                    <div class="info-radek">
-                        <span class="label">Platí do:</span>
-                        <span>${sim.platnost || 'neuvedeno'}</span>
-                    </div>
-                `;
-                container.appendChild(karta);
+                const op = urciOperatora(sim.zbytekTextu);
+                if (!skupiny[op]) skupiny[op] = [];
+                skupiny[op].push(sim);
             });
+
+            // 2. Vykreslení skupin (Vodafone, T-Mobile, pak zbytek)
+            const poradi = ['vodafone', 't-mobile', 'o2', 'ostatní'];
+            
+            poradi.forEach(op => {
+                if (skupiny[op] && skupiny[op].length > 0) {
+                    // Nadpis operátora
+                    const nadpis = document.createElement('div');
+                    nadpis.className = 'operator-header';
+                    nadpis.style.color = `var(--${op.replace('-', '') === 'tmobile' ? 'tmobile-pink' : op.replace('-', '') + (op === 'vodafone' ? '-red' : '-blue')})`;
+                    if (op === 'ostatní') nadpis.style.color = '#888';
+                    nadpis.innerText = op;
+                    container.appendChild(nadpis);
+
+                    // Grid pro daného operátora
+                    const grid = document.createElement('div');
+                    grid.className = 'grid';
+                    
+                    skupiny[op].forEach(sim => {
+                        grid.appendChild(vytvorKartu(sim, op));
+                    });
+                    
+                    container.appendChild(grid);
+                }
+            });
+        }
+
+        // Původní zobrazení pro deaktivované (vše v jedné hromadě)
+        function renderujSekciOstatni(seznam, elementId, jeDeaktivovana = false) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = "";
+            seznam.forEach(sim => {
+                const op = urciOperatora(sim.zbytekTextu);
+                container.appendChild(vytvorKartu(sim, op, jeDeaktivovana));
+            });
+        }
+
+        function vytvorKartu(sim, opClass, jeDeaktivovana = false) {
+            const karta = document.createElement('div');
+            karta.className = `karta ${opClass.replace(' ', '-')}` + (jeDeaktivovana ? ' karta-deaktivovana' : '');
+            
+            karta.innerHTML = `
+                <div class="id-sim">${sim.idSim}</div>
+                <span class="cislo-text">${sim.zbytekTextu}</span>
+                <div class="info-radek">
+                    <span class="label">V telefonu:</span>
+                    <span>${sim.vTelefonu || '---'}</span>
+                </div>
+                <div class="info-radek">
+                    <span class="label">Platí do:</span>
+                    <span>${sim.platnost || 'neuvedeno'}</span>
+                </div>
+            `;
+            return karta;
         }
 
         nactiData();
